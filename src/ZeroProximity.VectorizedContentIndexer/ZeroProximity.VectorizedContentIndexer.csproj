@@ -10,6 +10,8 @@
     <PackageTags>vectorization;content-indexing;hybrid-search;lucene;onnx;embeddings;rag;search;vector-search;bm25;semantic-search</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <!-- Version is managed by GitVersion.MsBuild -->
+    <!-- Lucene.NET has been in beta indefinitely; suppress the stable-on-prerelease-dep warning -->
+    <NoWarn>$(NoWarn);NU5104</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
