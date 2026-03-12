@@ -1,0 +1,21 @@
+.NET Performance Optimization Guide
+
+Minimize allocations in hot paths by using Span<T>, stackalloc for small arrays, and ArrayPool<T> for larger buffers. Every allocation has a cost - the allocation itself, initialization, and eventual garbage collection. The garbage collector must track all allocations and eventually reclaim the memory, which can cause pauses in your application.
+
+Use StringBuilder for string concatenation in loops. Each string concatenation creates a new string object, leading to O(n^2) allocation behavior. StringBuilder amortizes this to O(n) by maintaining a resizable buffer. For a small number of concatenations (2-3), direct concatenation or string interpolation is fine.
+
+Profile before optimizing. Use tools like BenchmarkDotNet for microbenchmarks and dotnet-trace/PerfView for production profiling. Optimize based on data, not intuition - the bottleneck is often not where you expect. Premature optimization is the root of all evil, but measured optimization is essential for performance-critical applications.
+
+Consider using value types (structs) for small, immutable data that is frequently created and destroyed. Structs avoid heap allocation and garbage collection overhead, but be careful with boxing and large struct sizes. The general guideline is to keep structs under 16 bytes and make them immutable.
+
+Use async/await efficiently: avoid async void (except for event handlers), don't block on async code (no .Result or .Wait()), and use ConfigureAwait(false) in library code to avoid capturing synchronization context. Async overhead is minimal for true I/O-bound operations but adds unnecessary overhead for CPU-bound work.
+
+Cache expensive computations and I/O results when appropriate. Use MemoryCache or distributed caching (Redis, SQL Server) for data that doesn't change frequently. Be mindful of cache invalidation - it's one of the two hard problems in computer science (along with naming things and off-by-one errors).
+
+Use compiled regular expressions with RegexOptions.Compiled for patterns that are used frequently. For patterns known at compile time, use the Regex source generator in .NET 7+ for even better performance with zero runtime compilation cost.
+
+Optimize LINQ queries carefully. LINQ is convenient but can hide performance issues. Use .ToList() or .ToArray() strategically to materialize queries, avoid multiple enumeration of IEnumerable<T>, and consider using arrays or List<T> directly for performance-critical code.
+
+Leverage hardware intrinsics and SIMD operations for data-parallel workloads. The System.Numerics and System.Runtime.Intrinsics namespaces provide access to CPU-specific optimizations. Vector<T> provides a portable abstraction, while direct intrinsics offer maximum performance.
+
+Use object pooling for expensive-to-create objects that are used frequently. ObjectPool<T> from Microsoft.Extensions.ObjectPool provides a thread-safe pool implementation. This is especially useful for objects that have expensive initialization or hold native resources.

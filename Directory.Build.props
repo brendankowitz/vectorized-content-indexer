@@ -1,0 +1,33 @@
+<Project>
+  <PropertyGroup>
+    <!-- Target Framework -->
+    <TargetFramework>net9.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <!-- Build Configuration -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningsAsErrors />
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+
+    <!-- Documentation -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <!-- Package Metadata -->
+    <Authors>ContentIndexing Contributors</Authors>
+    <Company>ContentIndexing</Company>
+    <Copyright>Copyright (c) 2026 ContentIndexing Contributors</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/contentindexing/contentindexing</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/contentindexing/contentindexing</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+
+    <!-- Analysis -->
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+</Project>

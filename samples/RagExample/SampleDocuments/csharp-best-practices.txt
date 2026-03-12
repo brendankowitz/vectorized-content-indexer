@@ -1,0 +1,21 @@
+C# Best Practices Guide
+
+Always prefer readonly fields and immutable objects when possible. Immutability makes your code easier to reason about and helps prevent bugs caused by unintended state changes. Use records for immutable data types in C# 9 and later versions. Records provide value-based equality and immutability by default.
+
+Use dependency injection to manage object lifetimes and dependencies. This promotes loose coupling, makes testing easier, and follows the SOLID principles. The built-in Microsoft.Extensions.DependencyInjection container is suitable for most applications. Register services with appropriate lifetimes: Singleton for stateless services, Scoped for per-request services in web apps, and Transient for lightweight, stateless services.
+
+Handle exceptions at the appropriate level. Don't catch exceptions you can't handle meaningfully. Log exceptions with enough context for debugging, and use exception filters (when clause) to selectively catch specific cases. Create custom exception types when you need to convey specific error information or when catching specific error conditions.
+
+Follow consistent naming conventions: PascalCase for public members and types, camelCase for private fields (optionally prefixed with underscore), and SCREAMING_CASE for constants. Consistent naming improves code readability. Use meaningful names that describe what the variable, method, or class represents rather than how it works.
+
+Write self-documenting code with clear variable and method names. Use XML documentation comments for public APIs. Comments should explain 'why', not 'what' - the code itself should be clear enough to explain what it does. Keep methods short and focused on a single responsibility.
+
+Use pattern matching for cleaner conditional logic. Switch expressions and pattern matching (is, when clauses) provide more expressive and maintainable code than traditional if-else chains. Pattern matching also enables exhaustiveness checking by the compiler.
+
+Prefer composition over inheritance when designing class hierarchies. Inheritance creates tight coupling and can lead to fragile base class problems. Use interfaces to define contracts and compose functionality using delegation.
+
+Validate inputs at public API boundaries. Use guard clauses at the beginning of methods to validate parameters. Throw ArgumentNullException, ArgumentOutOfRangeException, or ArgumentException as appropriate. Consider using the built-in ArgumentNullException.ThrowIfNull() methods in .NET 6+.
+
+Use using statements or declarations to ensure proper disposal of resources. IDisposable objects like streams, database connections, and HTTP clients should always be disposed properly. The using declaration (C# 8+) provides a cleaner syntax that disposes at the end of the enclosing scope.
+
+Keep types small and focused. Follow the Single Responsibility Principle - each class should have one reason to change. Large classes with many responsibilities are harder to test, maintain, and understand.
