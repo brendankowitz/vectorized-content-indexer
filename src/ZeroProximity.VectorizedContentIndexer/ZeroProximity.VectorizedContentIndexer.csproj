@@ -7,7 +7,7 @@
     <Description>A hybrid content indexing library combining keyword search (Lucene.NET BM25), vector search (ONNX embeddings with custom AJVI index), and hybrid search (RRF fusion) with embedded MiniLM-L6-v2 model.</Description>
     <PackageTags>vectorization;content-indexing;hybrid-search;lucene;onnx;embeddings;rag;search;vector-search;bm25;semantic-search</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <Version>1.0.0</Version>
+    <!-- Version is managed by GitVersion.MsBuild -->
   </PropertyGroup>
 
   <ItemGroup>
