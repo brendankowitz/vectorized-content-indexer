@@ -181,6 +181,8 @@ public sealed partial class VectorSearchEngine<TDocument> : ISearchEngine<TDocum
         {
             _rwLock.ExitWriteLock();
         }
+
+        SaveMappingsSync();
     }
 
     /// <inheritdoc />
@@ -259,6 +261,8 @@ public sealed partial class VectorSearchEngine<TDocument> : ISearchEngine<TDocum
         {
             _rwLock.ExitWriteLock();
         }
+
+        SaveMappingsSync();
     }
 
     /// <inheritdoc />
@@ -394,10 +398,37 @@ public sealed partial class VectorSearchEngine<TDocument> : ISearchEngine<TDocum
             if (result.Document is IHierarchicalDocument<TChild> hierarchical)
             {
                 var children = hierarchical.GetChildren();
+
+                // Find the best-matching child by scanning for query terms
+                TChild? bestMatch = default;
+                if (children.Count > 0)
+                {
+                    var queryTerms = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    bestMatch = children
+                        .FirstOrDefault(c => queryTerms.Any(t =>
+                            c.GetSearchableText().Contains(t, StringComparison.OrdinalIgnoreCase)));
+                }
+
+                IReadOnlyList<TChild> contextChildren;
+                if (bestMatch != null)
+                {
+                    var before = contextBefore > 0
+                        ? hierarchical.GetChildrenBefore(bestMatch.Id, contextBefore)
+                        : [];
+                    var after = contextAfter > 0
+                        ? hierarchical.GetChildrenAfter(bestMatch.Id, contextAfter)
+                        : [];
+                    contextChildren = [..before, bestMatch, ..after];
+                }
+                else
+                {
+                    contextChildren = children;
+                }
+
                 resultsWithContext.Add(new SearchResultWithContext<TDocument, TChild>(
                     result.Document,
                     result.Score,
-                    children,
+                    contextChildren,
                     result.Highlight,
                     result.DecayFactor
                 ));

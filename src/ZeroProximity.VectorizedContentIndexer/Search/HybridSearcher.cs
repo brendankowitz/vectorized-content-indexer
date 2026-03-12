@@ -369,7 +369,7 @@ public sealed partial class HybridSearcher<TDocument> : ISearchEngine<TDocument>
             _vectorEngine.DeleteManyAsync(documentIdList, cancellationToken)
         ).ConfigureAwait(false);
 
-        return Math.Max(results[0], results[1]);
+        return results[0];
     }
 
     /// <inheritdoc />
