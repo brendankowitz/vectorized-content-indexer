@@ -40,6 +40,7 @@ public sealed partial class VectorSearchEngine<TDocument> : ISearchEngine<TDocum
 
     private readonly ConcurrentDictionary<string, TDocument> _documentCache = new();
     private readonly ConcurrentDictionary<Guid, string> _vectorToDocumentMap = new();
+    private readonly HashSet<string> _contentHashes = [];
     private readonly SemaphoreSlim _initLock = new(1, 1);
     private readonly ReaderWriterLockSlim _rwLock = new(LockRecursionPolicy.NoRecursion);
 
@@ -96,6 +97,13 @@ public sealed partial class VectorSearchEngine<TDocument> : ISearchEngine<TDocum
             {
                 _index = AjviIndex.Open(ajviPath, readOnly: false);
                 await LoadMappingsAsync(cancellationToken).ConfigureAwait(false);
+                
+                // Initialize hash cache
+                for (long i = 0; i < _index.EntryCount; i++)
+                {
+                    _contentHashes.Add(Convert.ToHexString(_index.GetContentHash(i)));
+                }
+
                 if (_logger?.IsEnabled(LogLevel.Information) == true)
                 {
                     Log.OpenedIndex(_logger, ajviPath, _index.EntryCount);
@@ -138,22 +146,25 @@ public sealed partial class VectorSearchEngine<TDocument> : ISearchEngine<TDocum
         // Cache the document
         _documentCache[document.Id] = document;
 
+        // Calculate content hash for deduplication
+        var contentHash = ComputeContentHash(content);
+        var hashStr = Convert.ToHexString(contentHash);
+
+        // Skip if already indexed (early check)
+        if (_contentHashes.Contains(hashStr))
+        {
+            return;
+        }
+
         // Generate embedding
         var embedding = await _embedder.EmbedAsync(content, cancellationToken).ConfigureAwait(false);
 
         _rwLock.EnterWriteLock();
         try
         {
-            // Calculate content hash for deduplication
-            var contentHash = ComputeContentHash(content);
-
-            // Skip if already indexed
-            if (_index!.ContainsHash(contentHash))
+            // Skip if already indexed (lock check)
+            if (_contentHashes.Contains(hashStr))
             {
-                if (_logger?.IsEnabled(LogLevel.Debug) == true)
-                {
-                    Log.SkippedDuplicateDocument(_logger, document.Id);
-                }
                 return;
             }
 
@@ -167,7 +178,8 @@ public sealed partial class VectorSearchEngine<TDocument> : ISearchEngine<TDocum
             var documentGuid = CreateGuidFromString(document.Id);
 
             // Add entry to index
-            _index.AddEntry(contentHash, documentGuid, 0, timestamp, embedding);
+            _index!.AddEntry(contentHash, documentGuid, 0, timestamp, embedding);
+            _contentHashes.Add(hashStr);
 
             // Map vector entry to document ID
             _vectorToDocumentMap[documentGuid] = document.Id;
@@ -229,9 +241,10 @@ public sealed partial class VectorSearchEngine<TDocument> : ISearchEngine<TDocum
 
                 // Calculate content hash for deduplication
                 var contentHash = ComputeContentHash(content);
+                var hashStr = Convert.ToHexString(contentHash);
 
                 // Skip if already indexed
-                if (_index!.ContainsHash(contentHash))
+                if (_contentHashes.Contains(hashStr))
                 {
                     continue;
                 }
@@ -246,7 +259,8 @@ public sealed partial class VectorSearchEngine<TDocument> : ISearchEngine<TDocum
                 var documentGuid = CreateGuidFromString(document.Id);
 
                 // Add entry to index
-                _index.AddEntry(contentHash, documentGuid, 0, timestamp, embedding);
+                _index!.AddEntry(contentHash, documentGuid, 0, timestamp, embedding);
+                _contentHashes.Add(hashStr);
 
                 // Map vector entry to document ID
                 _vectorToDocumentMap[documentGuid] = document.Id;
@@ -532,6 +546,7 @@ public sealed partial class VectorSearchEngine<TDocument> : ISearchEngine<TDocum
 
             _documentCache.Clear();
             _vectorToDocumentMap.Clear();
+            _contentHashes.Clear();
             _initialized = false;
 
             if (_logger?.IsEnabled(LogLevel.Information) == true)

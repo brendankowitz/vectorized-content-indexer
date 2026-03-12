@@ -225,7 +225,7 @@ public sealed class OnnxEmbeddingProvider : IEmbeddingProvider
         ArgumentNullException.ThrowIfNull(texts);
         if (texts.Count == 0)
         {
-            throw new ArgumentException("Texts collection cannot be empty.", nameof(texts));
+            return [];
         }
         ObjectDisposedException.ThrowIf(_disposed, this);
 
@@ -235,16 +235,108 @@ public sealed class OnnxEmbeddingProvider : IEmbeddingProvider
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var batchEnd = Math.Min(i + BatchSize, texts.Count);
-            var batchSize = batchEnd - i;
-
-            for (int j = 0; j < batchSize; j++)
+            var currentBatchSize = Math.Min(BatchSize, texts.Count - i);
+            var batchTexts = new List<string>(currentBatchSize);
+            for (int j = 0; j < currentBatchSize; j++)
             {
-                results[i + j] = await EmbedAsync(texts[i + j], cancellationToken);
+                batchTexts.Add(texts[i + j]);
+            }
+
+            var batchEmbeddings = await EmbedInternalBatchAsync(batchTexts, cancellationToken).ConfigureAwait(false);
+            for (int j = 0; j < currentBatchSize; j++)
+            {
+                results[i + j] = batchEmbeddings[j];
             }
         }
 
         return results;
+    }
+
+    private async Task<float[][]> EmbedInternalBatchAsync(List<string> texts, CancellationToken ct)
+    {
+        int batchSize = texts.Count;
+        var allTokenIds = new long[batchSize * MaxSequenceLength];
+        var allAttentionMask = new long[batchSize * MaxSequenceLength];
+        var allTokenTypeIds = new long[batchSize * MaxSequenceLength];
+
+        for (int i = 0; i < batchSize; i++)
+        {
+            var encoding = _tokenizer.EncodeToIds(texts[i]);
+            var tokenIds = encoding.Take(MaxSequenceLength).ToList();
+            
+            for (int j = 0; j < tokenIds.Count; j++)
+            {
+                allTokenIds[i * MaxSequenceLength + j] = (long)tokenIds[j];
+                allAttentionMask[i * MaxSequenceLength + j] = 1L;
+            }
+            // Padding is already zero due to array initialization
+        }
+
+        var inputIdsTensor = new DenseTensor<long>(allTokenIds, [batchSize, MaxSequenceLength]);
+        var attentionMaskTensor = new DenseTensor<long>(allAttentionMask, [batchSize, MaxSequenceLength]);
+        var tokenTypeIdsTensor = new DenseTensor<long>(allTokenTypeIds, [batchSize, MaxSequenceLength]);
+
+        var inputs = new List<NamedOnnxValue>
+        {
+            NamedOnnxValue.CreateFromTensor("input_ids", inputIdsTensor),
+            NamedOnnxValue.CreateFromTensor("attention_mask", attentionMaskTensor),
+            NamedOnnxValue.CreateFromTensor("token_type_ids", tokenTypeIdsTensor)
+        };
+
+        await _inferenceLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            using var results = _session.Run(inputs);
+            var output = results[0].AsTensor<float>();
+
+            var embeddings = new float[batchSize][];
+            for (int i = 0; i < batchSize; i++)
+            {
+                var rowMask = new long[MaxSequenceLength];
+                Array.Copy(allAttentionMask, i * MaxSequenceLength, rowMask, 0, MaxSequenceLength);
+                
+                embeddings[i] = MeanPooling(output, rowMask, i);
+                Normalize(embeddings[i]);
+            }
+
+            return embeddings;
+        }
+        finally
+        {
+            _inferenceLock.Release();
+        }
+    }
+
+    private static float[] MeanPooling(Tensor<float> output, long[] attentionMask, int batchIndex)
+    {
+        var sequenceLength = attentionMask.Length;
+        var hiddenSize = VectorDimensions;
+
+        var pooled = new float[hiddenSize];
+        var maskSum = 0L;
+
+        for (int i = 0; i < sequenceLength; i++)
+        {
+            if (attentionMask[i] > 0)
+            {
+                maskSum++;
+                for (int j = 0; j < hiddenSize; j++)
+                {
+                    // [batch, sequence, hidden]
+                    pooled[j] += output[batchIndex, i, j];
+                }
+            }
+        }
+
+        if (maskSum > 0)
+        {
+            for (int i = 0; i < hiddenSize; i++)
+            {
+                pooled[i] /= maskSum;
+            }
+        }
+
+        return pooled;
     }
 
     /// <summary>
