@@ -16,8 +16,9 @@
     <PackageReference Include="Lucene.Net.Analysis.Common" Version="4.8.0-beta00016" />
     <PackageReference Include="Lucene.Net.QueryParser" Version="4.8.0-beta00016" />
 
-    <!-- ONNX Runtime for embeddings (DirectML for GPU acceleration) -->
-    <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.20.0" />
+    <!-- ONNX Runtime for embeddings (DirectML for GPU acceleration on Windows, CPU on other platforms) -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.20.0" Condition="'$(OS)' == 'Windows_NT'" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.20.0" Condition="'$(OS)' != 'Windows_NT'" />
     <PackageReference Include="Microsoft.ML.Tokenizers" Version="1.0.0" />
 
     <!-- Tensor operations -->
