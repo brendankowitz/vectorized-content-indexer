@@ -1,0 +1,44 @@
+name: Pull Request
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'ContentIndexing.sln'
+      - '.github/workflows/**'
+      - 'Directory.Build.props'
+      - 'GitVersion.yml'
+
+jobs:
+  build:
+    name: Build and Test
+    uses: ./.github/workflows/build.yml
+    with:
+      dotnet-version: '9.0.x'
+      configuration: 'Release'
+
+  lint:
+    name: Code Quality
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore ContentIndexing.sln
+
+      - name: Format check
+        run: dotnet format ContentIndexing.sln --verify-no-changes --verbosity diagnostic
+
+      - name: Build with warnings as errors
+        run: dotnet build ContentIndexing.sln --configuration Release /p:TreatWarningsAsErrors=true

@@ -1,0 +1,275 @@
+[
+  {
+    "Id": "session-001",
+    "AgentType": "code-assistant",
+    "ProjectPath": "/projects/web-api",
+    "StartedAt": "2026-01-21T10:00:00Z",
+    "EndedAt": "2026-01-21T11:00:00Z",
+    "IsActive": false,
+    "Summary": "Debugging authentication errors in the login flow",
+    "Messages": [
+      {
+        "Id": "session-001:msg:0",
+        "SessionId": "session-001",
+        "Role": "user",
+        "Content": "I'm getting an authentication error when users try to log in. The error says 'Invalid credentials' even with correct passwords.",
+        "Timestamp": "2026-01-21T10:00:00Z"
+      },
+      {
+        "Id": "session-001:msg:1",
+        "SessionId": "session-001",
+        "Role": "assistant",
+        "Content": "Let me help you debug this authentication issue. First, let's check if the password hashing is consistent. Are you using the same hashing algorithm for registration and login? Can you show me the relevant code?",
+        "Timestamp": "2026-01-21T10:01:00Z"
+      },
+      {
+        "Id": "session-001:msg:2",
+        "SessionId": "session-001",
+        "Role": "user",
+        "Content": "Here's my login method:\n```csharp\npublic async Task<bool> ValidateUser(string email, string password)\n{\n    var user = await _db.Users.FindByEmailAsync(email);\n    return BCrypt.Verify(password, user.PasswordHash);\n}\n```",
+        "Timestamp": "2026-01-21T10:03:00Z"
+      },
+      {
+        "Id": "session-001:msg:3",
+        "SessionId": "session-001",
+        "Role": "assistant",
+        "Content": "The code looks correct for BCrypt verification. The issue might be in how passwords are hashed during registration. Check that you're using the same BCrypt work factor. Also verify the password isn't being trimmed or modified before hashing.",
+        "Timestamp": "2026-01-21T10:55:00Z",
+        "ToolCalls": ["file_read:/src/Auth/UserService.cs"]
+      }
+    ]
+  },
+  {
+    "Id": "session-002",
+    "AgentType": "code-assistant",
+    "ProjectPath": "/projects/data-processor",
+    "StartedAt": "2026-01-21T12:00:00Z",
+    "EndedAt": "2026-01-21T13:00:00Z",
+    "IsActive": false,
+    "Summary": "Help with JSON deserialization and handling nested objects",
+    "Messages": [
+      {
+        "Id": "session-002:msg:0",
+        "SessionId": "session-002",
+        "Role": "user",
+        "Content": "How do I parse JSON with nested objects in C#? I need to deserialize a complex API response.",
+        "Timestamp": "2026-01-21T12:00:00Z"
+      },
+      {
+        "Id": "session-002:msg:1",
+        "SessionId": "session-002",
+        "Role": "assistant",
+        "Content": "For JSON parsing in C#, you have two main options: System.Text.Json (built-in) or Newtonsoft.Json. Here's how to deserialize nested objects:\n\n```csharp\n// Using System.Text.Json\nvar response = JsonSerializer.Deserialize<ApiResponse>(json);\n\n// Define your models\npublic record ApiResponse(User User, List<Order> Orders);\npublic record User(string Name, Address Address);\npublic record Address(string City, string Country);\n```",
+        "Timestamp": "2026-01-21T12:01:00Z"
+      },
+      {
+        "Id": "session-002:msg:2",
+        "SessionId": "session-002",
+        "Role": "user",
+        "Content": "What if the JSON property names don't match my C# property names?",
+        "Timestamp": "2026-01-21T12:05:00Z"
+      },
+      {
+        "Id": "session-002:msg:3",
+        "SessionId": "session-002",
+        "Role": "assistant",
+        "Content": "You can use attributes to map different names:\n\n```csharp\npublic record User(\n    [property: JsonPropertyName(\"user_name\")] string Name,\n    [property: JsonPropertyName(\"mail_address\")] string Email\n);\n```\n\nOr configure globally:\n```csharp\nvar options = new JsonSerializerOptions\n{\n    PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower\n};\n```",
+        "Timestamp": "2026-01-21T12:50:00Z"
+      }
+    ]
+  },
+  {
+    "Id": "session-003",
+    "AgentType": "code-assistant",
+    "ProjectPath": "/projects/api-gateway",
+    "StartedAt": "2026-01-21T14:00:00Z",
+    "IsActive": true,
+    "Summary": "Best practices for async/await and Task handling",
+    "Messages": [
+      {
+        "Id": "session-003:msg:0",
+        "SessionId": "session-003",
+        "Role": "user",
+        "Content": "I'm having issues with async/await. My tasks seem to be blocking sometimes. What are the best practices?",
+        "Timestamp": "2026-01-21T14:00:00Z"
+      },
+      {
+        "Id": "session-003:msg:1",
+        "SessionId": "session-003",
+        "Role": "assistant",
+        "Content": "Common async/await issues and best practices:\n\n1. **Never block on async code**: Don't use `.Result` or `.Wait()` - this can cause deadlocks\n2. **Use ConfigureAwait(false)** in library code\n3. **Avoid async void** except for event handlers\n4. **Use Task.WhenAll** for parallel operations\n\nWhat specific issue are you seeing?",
+        "Timestamp": "2026-01-21T14:01:00Z"
+      },
+      {
+        "Id": "session-003:msg:2",
+        "SessionId": "session-003",
+        "Role": "user",
+        "Content": "I have multiple independent API calls that I want to run in parallel. Currently I'm awaiting each one sequentially.",
+        "Timestamp": "2026-01-21T14:05:00Z"
+      },
+      {
+        "Id": "session-003:msg:3",
+        "SessionId": "session-003",
+        "Role": "assistant",
+        "Content": "Here's how to run them in parallel with Task.WhenAll:\n\n```csharp\n// Instead of this (sequential):\nvar user = await GetUserAsync();\nvar orders = await GetOrdersAsync();\nvar settings = await GetSettingsAsync();\n\n// Do this (parallel):\nvar userTask = GetUserAsync();\nvar ordersTask = GetOrdersAsync();\nvar settingsTask = GetSettingsAsync();\n\nawait Task.WhenAll(userTask, ordersTask, settingsTask);\n\nvar user = userTask.Result; // Safe after WhenAll\nvar orders = ordersTask.Result;\nvar settings = settingsTask.Result;\n```\n\nThis runs all three calls concurrently, reducing total time from sum of all durations to just the longest one.",
+        "Timestamp": "2026-01-21T14:10:00Z"
+      }
+    ]
+  },
+  {
+    "Id": "session-004",
+    "AgentType": "code-assistant",
+    "ProjectPath": "/projects/file-processor",
+    "StartedAt": "2026-01-20T09:00:00Z",
+    "EndedAt": "2026-01-20T10:00:00Z",
+    "IsActive": false,
+    "Summary": "File I/O operations and handling FileNotFoundException",
+    "Messages": [
+      {
+        "Id": "session-004:msg:0",
+        "SessionId": "session-004",
+        "Role": "user",
+        "Content": "I'm getting FileNotFoundException when trying to read a config file. How should I handle this?",
+        "Timestamp": "2026-01-20T09:00:00Z"
+      },
+      {
+        "Id": "session-004:msg:1",
+        "SessionId": "session-004",
+        "Role": "assistant",
+        "Content": "There are several approaches to handle missing files:\n\n1. **Check existence first**:\n```csharp\nif (File.Exists(path))\n{\n    var content = File.ReadAllText(path);\n}\nelse\n{\n    // Create default or throw meaningful error\n}\n```\n\n2. **Use try-catch for atomic operation**:\n```csharp\ntry\n{\n    var content = File.ReadAllText(path);\n}\ncatch (FileNotFoundException)\n{\n    // Handle missing file\n}\n```\n\nThe second approach is better when the file might be deleted between the check and read.",
+        "Timestamp": "2026-01-20T09:02:00Z"
+      },
+      {
+        "Id": "session-004:msg:2",
+        "SessionId": "session-004",
+        "Role": "user",
+        "Content": "What about creating the file with default content if it doesn't exist?",
+        "Timestamp": "2026-01-20T09:10:00Z"
+      },
+      {
+        "Id": "session-004:msg:3",
+        "SessionId": "session-004",
+        "Role": "assistant",
+        "Content": "Here's a pattern for creating files with defaults:\n\n```csharp\npublic static async Task<Config> LoadOrCreateConfigAsync(string path)\n{\n    if (!File.Exists(path))\n    {\n        var defaultConfig = new Config { /* defaults */ };\n        var json = JsonSerializer.Serialize(defaultConfig);\n        await File.WriteAllTextAsync(path, json);\n        return defaultConfig;\n    }\n    \n    var content = await File.ReadAllTextAsync(path);\n    return JsonSerializer.Deserialize<Config>(content)!;\n}\n```",
+        "Timestamp": "2026-01-20T09:55:00Z"
+      }
+    ]
+  },
+  {
+    "Id": "session-005",
+    "AgentType": "research-agent",
+    "ProjectPath": "/projects/analytics",
+    "StartedAt": "2026-01-19T08:00:00Z",
+    "EndedAt": "2026-01-19T10:00:00Z",
+    "IsActive": false,
+    "Summary": "Optimizing Entity Framework queries and N+1 problem",
+    "Messages": [
+      {
+        "Id": "session-005:msg:0",
+        "SessionId": "session-005",
+        "Role": "user",
+        "Content": "My EF Core queries are slow. I think I have an N+1 query problem. How do I fix it?",
+        "Timestamp": "2026-01-19T08:00:00Z"
+      },
+      {
+        "Id": "session-005:msg:1",
+        "SessionId": "session-005",
+        "Role": "assistant",
+        "Content": "The N+1 problem occurs when you fetch a list and then lazy-load related data for each item. Here's how to fix it:\n\n**Use eager loading with Include:**\n```csharp\n// Instead of lazy loading:\nvar orders = await _db.Orders.ToListAsync();\nforeach (var order in orders)\n{\n    var customer = order.Customer; // N additional queries!\n}\n\n// Use Include:\nvar orders = await _db.Orders\n    .Include(o => o.Customer)\n    .Include(o => o.OrderItems)\n    .ToListAsync(); // Single query with joins\n```",
+        "Timestamp": "2026-01-19T08:02:00Z"
+      },
+      {
+        "Id": "session-005:msg:2",
+        "SessionId": "session-005",
+        "Role": "user",
+        "Content": "What if I have deep nesting, like Order -> OrderItems -> Product -> Category?",
+        "Timestamp": "2026-01-19T08:15:00Z"
+      },
+      {
+        "Id": "session-005:msg:3",
+        "SessionId": "session-005",
+        "Role": "assistant",
+        "Content": "For deeply nested includes, use ThenInclude:\n\n```csharp\nvar orders = await _db.Orders\n    .Include(o => o.Customer)\n    .Include(o => o.OrderItems)\n        .ThenInclude(oi => oi.Product)\n            .ThenInclude(p => p.Category)\n    .ToListAsync();\n```\n\nBe careful with deep includes as they can create large cartesian products. Consider using split queries:\n```csharp\nvar orders = await _db.Orders\n    .Include(o => o.OrderItems)\n    .AsSplitQuery() // Separate queries instead of joins\n    .ToListAsync();\n```",
+        "Timestamp": "2026-01-19T09:50:00Z"
+      }
+    ]
+  },
+  {
+    "Id": "session-006",
+    "AgentType": "support-bot",
+    "ProjectPath": "/projects/customer-portal",
+    "StartedAt": "2026-01-18T15:00:00Z",
+    "EndedAt": "2026-01-18T15:30:00Z",
+    "IsActive": false,
+    "Summary": "Troubleshooting HTTP client timeouts and connection issues",
+    "Messages": [
+      {
+        "Id": "session-006:msg:0",
+        "SessionId": "session-006",
+        "Role": "user",
+        "Content": "My HttpClient requests are timing out when calling an external API. How can I increase the timeout?",
+        "Timestamp": "2026-01-18T15:00:00Z"
+      },
+      {
+        "Id": "session-006:msg:1",
+        "SessionId": "session-006",
+        "Role": "assistant",
+        "Content": "You can configure HttpClient timeout in several ways:\n\n1. **On HttpClient instance:**\n```csharp\nvar client = new HttpClient();\nclient.Timeout = TimeSpan.FromSeconds(60);\n```\n\n2. **Using IHttpClientFactory (recommended):**\n```csharp\nservices.AddHttpClient(\"MyClient\", client =>\n{\n    client.Timeout = TimeSpan.FromSeconds(60);\n});\n```\n\n3. **Per-request with CancellationToken:**\n```csharp\nusing var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));\nawait client.GetAsync(url, cts.Token);\n```",
+        "Timestamp": "2026-01-18T15:01:00Z"
+      },
+      {
+        "Id": "session-006:msg:2",
+        "SessionId": "session-006",
+        "Role": "user",
+        "Content": "Thanks! Also, should I create a new HttpClient for each request?",
+        "Timestamp": "2026-01-18T15:05:00Z"
+      },
+      {
+        "Id": "session-006:msg:3",
+        "SessionId": "session-006",
+        "Role": "assistant",
+        "Content": "No! Creating a new HttpClient for each request is a common mistake that can cause socket exhaustion. Instead:\n\n1. **Use IHttpClientFactory** (best for DI scenarios)\n2. **Use a static/singleton HttpClient** (fine for simple cases)\n\n```csharp\n// Good - reuse the client\nprivate static readonly HttpClient _client = new();\n\n// Better - use factory in ASP.NET Core\nservices.AddHttpClient<MyService>();\n```\n\nHttpClient is designed to be reused. It pools connections and handles DNS changes properly when used correctly.",
+        "Timestamp": "2026-01-18T15:25:00Z"
+      }
+    ]
+  },
+  {
+    "Id": "session-007",
+    "AgentType": "code-assistant",
+    "ProjectPath": "/projects/microservices",
+    "StartedAt": "2026-01-17T11:00:00Z",
+    "EndedAt": "2026-01-17T12:30:00Z",
+    "IsActive": false,
+    "Summary": "Implementing retry policies with Polly for resilient HTTP calls",
+    "Messages": [
+      {
+        "Id": "session-007:msg:0",
+        "SessionId": "session-007",
+        "Role": "user",
+        "Content": "How can I add retry logic to my HTTP calls for transient failures?",
+        "Timestamp": "2026-01-17T11:00:00Z"
+      },
+      {
+        "Id": "session-007:msg:1",
+        "SessionId": "session-007",
+        "Role": "assistant",
+        "Content": "Use Polly for resilience policies. Here's how to set it up with IHttpClientFactory:\n\n```csharp\n// Install Microsoft.Extensions.Http.Polly\n\nservices.AddHttpClient<MyService>()\n    .AddTransientHttpErrorPolicy(policy =>\n        policy.WaitAndRetryAsync(3, attempt =>\n            TimeSpan.FromSeconds(Math.Pow(2, attempt))));\n```\n\nThis adds exponential backoff: 2s, 4s, 8s delays between retries for transient errors (5xx, 408, network failures).",
+        "Timestamp": "2026-01-17T11:02:00Z"
+      },
+      {
+        "Id": "session-007:msg:2",
+        "SessionId": "session-007",
+        "Role": "user",
+        "Content": "Can I combine retry with a circuit breaker?",
+        "Timestamp": "2026-01-17T11:30:00Z"
+      },
+      {
+        "Id": "session-007:msg:3",
+        "SessionId": "session-007",
+        "Role": "assistant",
+        "Content": "Yes! Combine retry with circuit breaker for full resilience:\n\n```csharp\nservices.AddHttpClient<MyService>()\n    .AddTransientHttpErrorPolicy(policy =>\n        policy.WaitAndRetryAsync(3, _ => TimeSpan.FromSeconds(1)))\n    .AddTransientHttpErrorPolicy(policy =>\n        policy.CircuitBreakerAsync(\n            handledEventsAllowedBeforeBreaking: 5,\n            durationOfBreak: TimeSpan.FromSeconds(30)));\n```\n\nThe circuit breaker 'opens' after 5 failures, preventing requests for 30 seconds. This protects both your app and the failing service.",
+        "Timestamp": "2026-01-17T12:25:00Z"
+      }
+    ]
+  }
+]

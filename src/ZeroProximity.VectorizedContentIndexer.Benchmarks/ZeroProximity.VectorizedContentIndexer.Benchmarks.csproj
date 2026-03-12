@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>ZeroProximity.VectorizedContentIndexer.Benchmarks</RootNamespace>
+    <AssemblyName>ZeroProximity.VectorizedContentIndexer.Benchmarks</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- BenchmarkDotNet for performance testing -->
+    <PackageReference Include="BenchmarkDotNet" Version="0.14.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ZeroProximity.VectorizedContentIndexer\ZeroProximity.VectorizedContentIndexer.csproj" />
+  </ItemGroup>
+
+</Project>

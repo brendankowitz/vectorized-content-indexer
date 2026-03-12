@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework></TargetFramework>
+    <TargetFrameworks>net9.0;net9.0-windows</TargetFrameworks>
+    <RootNamespace>ZeroProximity.VectorizedContentIndexer</RootNamespace>
+    <AssemblyName>ZeroProximity.VectorizedContentIndexer</AssemblyName>
+    <PackageId>ZeroProximity.VectorizedContentIndexer</PackageId>
+    <Description>A hybrid content indexing library combining keyword search (Lucene.NET BM25), vector search (ONNX embeddings with custom AJVI index), and hybrid search (RRF fusion) with embedded MiniLM-L6-v2 model.</Description>
+    <PackageTags>vectorization;content-indexing;hybrid-search;lucene;onnx;embeddings;rag;search;vector-search;bm25;semantic-search</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!-- Version is managed by GitVersion.MsBuild -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Lucene.NET for BM25 keyword search -->
+    <PackageReference Include="Lucene.Net" Version="4.8.0-beta00016" />
+    <PackageReference Include="Lucene.Net.Analysis.Common" Version="4.8.0-beta00016" />
+    <PackageReference Include="Lucene.Net.QueryParser" Version="4.8.0-beta00016" />
+
+    <!-- ONNX Runtime: DirectML (GPU) on net9.0-windows, CPU runtime on all other platforms -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.20.0" Condition="'$(TargetFramework)' == 'net9.0-windows'" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.20.0" Condition="'$(TargetFramework)' != 'net9.0-windows'" />
+    <PackageReference Include="Microsoft.ML.Tokenizers" Version="1.0.0" />
+
+    <!-- Tensor operations -->
+    <PackageReference Include="System.Numerics.Tensors" Version="10.0.1" />
+
+    <!-- Microsoft.Extensions for DI, Logging, Options -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Embedded resources (models will be added here) -->
+    <EmbeddedResource Include="Resources\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

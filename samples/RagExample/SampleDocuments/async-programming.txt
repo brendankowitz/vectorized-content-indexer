@@ -1,0 +1,21 @@
+Async Programming in C# Guide
+
+Async programming in C# allows you to write non-blocking code that scales better under load. Use async/await for I/O-bound operations like file access, database queries, and HTTP requests. The compiler transforms async methods into state machines that resume execution when awaited operations complete.
+
+The Task type represents an asynchronous operation. Task<T> represents an operation that returns a value. Use ValueTask<T> for operations that frequently complete synchronously to avoid Task allocation overhead. ValueTask<T> is particularly beneficial in high-performance scenarios where the async path is rarely taken.
+
+Cancellation tokens allow you to cancel long-running operations cooperatively. Pass CancellationToken to async methods and check IsCancellationRequested periodically or call ThrowIfCancellationRequested(). Create cancellation tokens using CancellationTokenSource and link multiple sources together when needed.
+
+Avoid blocking the thread pool by never calling .Result or .Wait() on incomplete tasks. This can lead to thread pool exhaustion and deadlocks, especially in ASP.NET applications with synchronization contexts. If you must block, use GetAwaiter().GetResult() to propagate the original exception rather than wrapping it in AggregateException.
+
+Use Task.WhenAll() to run multiple independent async operations concurrently. This is much more efficient than awaiting each task sequentially. For operations that might fail, consider Task.WhenAny() with proper error handling. Use Task.WhenEach() in .NET 9+ for processing results as they complete.
+
+ConfigureAwait(false) prevents capturing the synchronization context after an await. Use this in library code to improve performance and avoid deadlocks. However, don't use it in code that needs to access UI elements or HttpContext after the await. In ASP.NET Core (which has no synchronization context), ConfigureAwait(false) has no effect but is still a good practice for portability.
+
+Async streams (IAsyncEnumerable<T>) enable producing and consuming sequences of values asynchronously. Use await foreach to consume async streams. This is perfect for scenarios like reading from databases, APIs, or files where data arrives incrementally.
+
+Handle exceptions in async code carefully. Exceptions thrown in async methods are captured and placed on the returned Task. They're rethrown when the Task is awaited. Use try-catch around await statements, and be aware that Task.WhenAll rethrows only the first exception while all exceptions are available in the Task.Exception property.
+
+Use SemaphoreSlim for async-compatible synchronization. Unlike lock and Monitor, SemaphoreSlim's WaitAsync() method doesn't block the thread. This is essential for protecting shared resources in async code without causing thread pool exhaustion.
+
+Implement the async dispose pattern (IAsyncDisposable) for types that hold async resources. Use await using to ensure proper cleanup. This is important for types like database connections or network streams that may need to perform async operations during cleanup.
