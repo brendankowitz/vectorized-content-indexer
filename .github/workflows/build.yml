@@ -36,4 +36,4 @@ jobs:
         run: dotnet build ContentIndexing.sln --configuration ${{ inputs.configuration }} --no-restore
 
       - name: Test
-        run: dotnet test ContentIndexing.sln --configuration ${{ inputs.configuration }} --no-build --verbosity normal
+        run: dotnet test ContentIndexing.sln --configuration ${{ inputs.configuration }} --no-build --verbosity normal --framework net9.0
