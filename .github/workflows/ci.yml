@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'ContentIndexing.sln'
+      - '.github/workflows/**'
+      - 'Directory.Build.props'
+      - 'GitVersion.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build and Test
+    uses: ./.github/workflows/build.yml
+    with:
+      dotnet-version: '9.0.x'
+      configuration: 'Release'
+
+  publish:
+    name: Pack and Publish to NuGet
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Pack
+        run: dotnet pack src/ZeroProximity.VectorizedContentIndexer/ZeroProximity.VectorizedContentIndexer.csproj --configuration Release --output ./packages
+
+      - name: Push to NuGet
+        run: dotnet nuget push ./packages/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate

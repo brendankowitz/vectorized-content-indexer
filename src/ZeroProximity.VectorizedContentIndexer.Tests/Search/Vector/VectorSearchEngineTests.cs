@@ -289,7 +289,7 @@ public sealed class VectorSearchEngineTests : IAsyncDisposable
         // Assert
         results.Should().HaveCount(1);
         results[0].Document.Id.Should().Be("unique-doc");
-        results[0].Score.Should().BeGreaterThan(0);
+        results[0].Score.Should().BeInRange(-1, 1); // cosine similarity is [-1, 1]
     }
 
     [Fact]

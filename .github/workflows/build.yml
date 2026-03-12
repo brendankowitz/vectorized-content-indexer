@@ -1,0 +1,39 @@
+name: Build
+
+on:
+  workflow_call:
+    inputs:
+      dotnet-version:
+        description: '.NET SDK version'
+        required: false
+        type: string
+        default: '9.0.x'
+      configuration:
+        description: 'Build configuration'
+        required: false
+        type: string
+        default: 'Release'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Restore dependencies
+        run: dotnet restore ContentIndexing.sln
+
+      - name: Build
+        run: dotnet build ContentIndexing.sln --configuration ${{ inputs.configuration }} --no-restore
+
+      - name: Test
+        run: dotnet test ContentIndexing.sln --configuration ${{ inputs.configuration }} --no-build --verbosity normal
