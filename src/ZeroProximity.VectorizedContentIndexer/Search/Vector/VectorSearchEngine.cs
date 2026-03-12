@@ -418,7 +418,7 @@ public sealed partial class VectorSearchEngine<TDocument> : ISearchEngine<TDocum
                     var after = contextAfter > 0
                         ? hierarchical.GetChildrenAfter(bestMatch.Id, contextAfter)
                         : [];
-                    contextChildren = [..before, bestMatch, ..after];
+                    contextChildren = [.. before, bestMatch, .. after];
                 }
                 else
                 {
@@ -685,8 +685,10 @@ public sealed partial class VectorSearchEngine<TDocument> : ISearchEngine<TDocum
                 var end = Math.Min(content.Length, index + lowerTerm.Length + 150);
                 var highlight = content.Substring(start, end - start);
 
-                if (start > 0) highlight = string.Concat("...", highlight);
-                if (end < content.Length) highlight = string.Concat(highlight, "...");
+                if (start > 0)
+                    highlight = string.Concat("...", highlight);
+                if (end < content.Length)
+                    highlight = string.Concat(highlight, "...");
 
                 return highlight;
             }

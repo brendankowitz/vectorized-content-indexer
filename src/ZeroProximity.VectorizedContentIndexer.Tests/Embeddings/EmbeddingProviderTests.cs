@@ -201,7 +201,9 @@ public class EmbeddingProviderTests
         finally
         {
             // Cleanup
-            try { Directory.Delete(tempPath, recursive: true); } catch { /* ignore */ }
+            try
+            { Directory.Delete(tempPath, recursive: true); }
+            catch { /* ignore */ }
         }
     }
 

@@ -147,8 +147,10 @@ public sealed class BenchmarkDocumentMapper : ILuceneDocumentMapper<BenchmarkDoc
                 var end = Math.Min(content.Length, index + lowerTerm.Length + 150);
                 var highlight = content.Substring(start, end - start);
 
-                if (start > 0) highlight = string.Concat("...", highlight);
-                if (end < content.Length) highlight = string.Concat(highlight, "...");
+                if (start > 0)
+                    highlight = string.Concat("...", highlight);
+                if (end < content.Length)
+                    highlight = string.Concat(highlight, "...");
 
                 return highlight;
             }

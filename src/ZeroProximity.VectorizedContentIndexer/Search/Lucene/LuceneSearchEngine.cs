@@ -430,7 +430,8 @@ public sealed partial class LuceneSearchEngine<TDocument> : ISearchEngine<TDocum
             else if (_searcherManager != null)
             {
                 var searcher = _searcherManager.Acquire();
-                try { return Task.FromResult(searcher.IndexReader.NumDocs); }
+                try
+                { return Task.FromResult(searcher.IndexReader.NumDocs); }
                 finally { _searcherManager.Release(searcher); }
             }
             return Task.FromResult(0);
@@ -582,7 +583,9 @@ public sealed partial class LuceneSearchEngine<TDocument> : ISearchEngine<TDocum
             // Clear stale lock from previous crash
             if (IndexWriter.IsLocked(_directory!))
             {
-                try { IndexWriter.Unlock(_directory!); } catch { /* held by live process */ }
+                try
+                { IndexWriter.Unlock(_directory!); }
+                catch { /* held by live process */ }
             }
 
             var indexConfig = new IndexWriterConfig(LUCENE_VERSION, _analyzer!)

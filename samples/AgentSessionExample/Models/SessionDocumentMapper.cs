@@ -130,15 +130,18 @@ public sealed class SessionDocumentMapper : ILuceneDocumentMapper<SessionDocumen
         foreach (var term in queryTerms)
         {
             var lowerTerm = term.ToLowerInvariant().Trim('"', '\'');
-            if (lowerTerm.Length < 2) continue; // Skip very short terms
+            if (lowerTerm.Length < 2)
+                continue; // Skip very short terms
 
             var index = lowerContent.IndexOf(lowerTerm, StringComparison.OrdinalIgnoreCase);
             if (index >= 0)
             {
                 // Find the start of the line containing the match
                 var lineStart = content.LastIndexOf('\n', Math.Max(0, index - 1));
-                if (lineStart < 0) lineStart = 0;
-                else lineStart++; // Skip the newline character
+                if (lineStart < 0)
+                    lineStart = 0;
+                else
+                    lineStart++; // Skip the newline character
 
                 // Find a reasonable end point
                 var contextStart = Math.Max(lineStart, index - 50);
@@ -153,8 +156,10 @@ public sealed class SessionDocumentMapper : ILuceneDocumentMapper<SessionDocumen
                 var highlight = content.Substring(contextStart, contextEnd - contextStart);
 
                 // Add ellipsis if truncated
-                if (contextStart > lineStart) highlight = "..." + highlight;
-                if (contextEnd < content.Length) highlight += "...";
+                if (contextStart > lineStart)
+                    highlight = "..." + highlight;
+                if (contextEnd < content.Length)
+                    highlight += "...";
 
                 return highlight.Trim();
             }
