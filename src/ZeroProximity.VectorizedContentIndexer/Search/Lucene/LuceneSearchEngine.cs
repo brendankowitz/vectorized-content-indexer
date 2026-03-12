@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Lucene.Net.Analysis;
 using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Documents;
@@ -21,7 +22,8 @@ namespace ZeroProximity.VectorizedContentIndexer.Search.Lucene;
 /// which considers term frequency, inverse document frequency, and document length normalization.
 /// </para>
 /// <para>
-/// Thread safety: Uses SemaphoreSlim for serialized writes. Reads are concurrent-safe via SearcherManager.
+/// Thread safety: Uses ReaderWriterLockSlim for concurrent reads and serialized writes.
+/// Starts in read-only mode and upgrades to write mode on first write operation.
 /// </para>
 /// <para>
 /// Key features:
@@ -42,8 +44,9 @@ public sealed partial class LuceneSearchEngine<TDocument> : ISearchEngine<TDocum
     private readonly string _indexPath;
     private readonly ILuceneDocumentMapper<TDocument> _mapper;
     private readonly ILogger<LuceneSearchEngine<TDocument>>? _logger;
-    private readonly SemaphoreSlim _writeLock = new(1, 1);
+    private readonly ReaderWriterLockSlim _indexLock = new(LockRecursionPolicy.NoRecursion);
     private readonly ConcurrentDictionary<string, TDocument> _documentCache = new();
+    private bool _readOnly;
 
     private FSDirectory? _directory;
     private Analyzer? _analyzer;
@@ -70,26 +73,27 @@ public sealed partial class LuceneSearchEngine<TDocument> : ISearchEngine<TDocum
     }
 
     /// <summary>
-    /// Initializes the Lucene index, creating the directory and index files if needed.
+    /// Initializes the Lucene index, creating the directory and analyzer. Starts in read-only mode;
+    /// upgrades to write mode on demand when a write operation is first requested.
     /// </summary>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     /// <remarks>
     /// This method is idempotent - calling it multiple times has no effect after the first call.
     /// </remarks>
-    public async Task InitializeAsync(CancellationToken cancellationToken = default)
+    public Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         if (_initialized)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        _indexLock.EnterWriteLock();
         try
         {
             if (_initialized)
             {
-                return; // Double-check after acquiring lock
+                return Task.CompletedTask; // Double-check after acquiring lock
             }
 
             // Create index directory if it doesn't exist
@@ -101,17 +105,16 @@ public sealed partial class LuceneSearchEngine<TDocument> : ISearchEngine<TDocum
             _directory = FSDirectory.Open(_indexPath);
             _analyzer = new StandardAnalyzer(LUCENE_VERSION);
 
-            var indexConfig = new IndexWriterConfig(LUCENE_VERSION, _analyzer)
+            // Start in read-only mode; upgrade to write on demand
+            _writer = null;
+            _readOnly = true;
+
+            if (DirectoryReader.IndexExists(_directory))
             {
-                OpenMode = OpenMode.CREATE_OR_APPEND,
-                // Use BM25 similarity for better ranking
-                Similarity = new BM25Similarity()
-            };
+                _searcherManager = new SearcherManager(_directory, null);
+            }
+            // If index doesn't exist yet, leave _searcherManager null until first write
 
-            _writer = new IndexWriter(_directory, indexConfig);
-            _writer.Commit(); // Ensure index is created
-
-            _searcherManager = new SearcherManager(_writer, true, null);
             _initialized = true;
 
             if (_logger?.IsEnabled(LogLevel.Information) == true)
@@ -121,17 +124,19 @@ public sealed partial class LuceneSearchEngine<TDocument> : ISearchEngine<TDocum
         }
         finally
         {
-            _writeLock.Release();
+            _indexLock.ExitWriteLock();
         }
+
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc />
-    public async Task IndexAsync(TDocument document, CancellationToken cancellationToken = default)
+    public Task IndexAsync(TDocument document, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(document);
-        EnsureInitialized();
+        EnsureWritable();
 
-        await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        _indexLock.EnterWriteLock();
         try
         {
             // Delete any existing document with the same ID (for updates)
@@ -156,17 +161,19 @@ public sealed partial class LuceneSearchEngine<TDocument> : ISearchEngine<TDocum
         }
         finally
         {
-            _writeLock.Release();
+            _indexLock.ExitWriteLock();
         }
+
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc />
-    public async Task IndexManyAsync(IEnumerable<TDocument> documents, CancellationToken cancellationToken = default)
+    public Task IndexManyAsync(IEnumerable<TDocument> documents, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(documents);
-        EnsureInitialized();
+        EnsureWritable();
 
-        await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        _indexLock.EnterWriteLock();
         try
         {
             var count = 0;
@@ -198,8 +205,10 @@ public sealed partial class LuceneSearchEngine<TDocument> : ISearchEngine<TDocum
         }
         finally
         {
-            _writeLock.Release();
+            _indexLock.ExitWriteLock();
         }
+
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc />
@@ -227,11 +236,14 @@ public sealed partial class LuceneSearchEngine<TDocument> : ISearchEngine<TDocum
 
         EnsureInitialized();
 
-        _searcherManager?.MaybeRefresh();
-        var searcher = _searcherManager?.Acquire();
-
+        // Acquire read lock to prevent _searcherManager being swapped mid-acquire during write-mode upgrade
+        _indexLock.EnterReadLock();
+        IndexSearcher? searcher = null;
         try
         {
+            _searcherManager?.MaybeRefresh();
+            searcher = _searcherManager?.Acquire();
+
             if (searcher == null)
             {
                 return Task.FromResult<IReadOnlyList<SearchResult<TDocument>>>(Array.Empty<SearchResult<TDocument>>());
@@ -310,16 +322,17 @@ public sealed partial class LuceneSearchEngine<TDocument> : ISearchEngine<TDocum
             {
                 _searcherManager?.Release(searcher);
             }
+            _indexLock.ExitReadLock();
         }
     }
 
     /// <inheritdoc />
-    public async Task<bool> DeleteAsync(string documentId, CancellationToken cancellationToken = default)
+    public Task<bool> DeleteAsync(string documentId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(documentId);
-        EnsureInitialized();
+        EnsureWritable();
 
-        await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        _indexLock.EnterWriteLock();
         try
         {
             var idTerm = new Term(_mapper.IdField, documentId);
@@ -333,21 +346,21 @@ public sealed partial class LuceneSearchEngine<TDocument> : ISearchEngine<TDocum
                 Log.DeletedDocument(_logger, documentId);
             }
 
-            return true;
+            return Task.FromResult(true);
         }
         finally
         {
-            _writeLock.Release();
+            _indexLock.ExitWriteLock();
         }
     }
 
     /// <inheritdoc />
-    public async Task<int> DeleteManyAsync(IEnumerable<string> documentIds, CancellationToken cancellationToken = default)
+    public Task<int> DeleteManyAsync(IEnumerable<string> documentIds, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(documentIds);
-        EnsureInitialized();
+        EnsureWritable();
 
-        await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        _indexLock.EnterWriteLock();
         try
         {
             var count = 0;
@@ -369,20 +382,20 @@ public sealed partial class LuceneSearchEngine<TDocument> : ISearchEngine<TDocum
                 Log.DeletedDocuments(_logger, count);
             }
 
-            return count;
+            return Task.FromResult(count);
         }
         finally
         {
-            _writeLock.Release();
+            _indexLock.ExitWriteLock();
         }
     }
 
     /// <inheritdoc />
-    public async Task ClearAsync(CancellationToken cancellationToken = default)
+    public Task ClearAsync(CancellationToken cancellationToken = default)
     {
-        EnsureInitialized();
+        EnsureWritable();
 
-        await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        _indexLock.EnterWriteLock();
         try
         {
             _writer!.DeleteAll();
@@ -397,32 +410,43 @@ public sealed partial class LuceneSearchEngine<TDocument> : ISearchEngine<TDocum
         }
         finally
         {
-            _writeLock.Release();
+            _indexLock.ExitWriteLock();
         }
+
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc />
-    public async Task<int> GetCountAsync(CancellationToken cancellationToken = default)
+    public Task<int> GetCountAsync(CancellationToken cancellationToken = default)
     {
         EnsureInitialized();
 
-        await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        _indexLock.EnterReadLock();
         try
         {
-            return _writer!.NumDocs;
+            // If _writer is available, use it; otherwise use SearcherManager
+            if (_writer != null)
+                return Task.FromResult(_writer.NumDocs);
+            else if (_searcherManager != null)
+            {
+                var searcher = _searcherManager.Acquire();
+                try { return Task.FromResult(searcher.IndexReader.NumDocs); }
+                finally { _searcherManager.Release(searcher); }
+            }
+            return Task.FromResult(0);
         }
         finally
         {
-            _writeLock.Release();
+            _indexLock.ExitReadLock();
         }
     }
 
     /// <inheritdoc />
-    public async Task OptimizeAsync(CancellationToken cancellationToken = default)
+    public Task OptimizeAsync(CancellationToken cancellationToken = default)
     {
-        EnsureInitialized();
+        EnsureWritable();
 
-        await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        _indexLock.EnterWriteLock();
         try
         {
             // Force merge to a single segment for optimal read performance
@@ -437,8 +461,10 @@ public sealed partial class LuceneSearchEngine<TDocument> : ISearchEngine<TDocum
         }
         finally
         {
-            _writeLock.Release();
+            _indexLock.ExitWriteLock();
         }
+
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -446,15 +472,40 @@ public sealed partial class LuceneSearchEngine<TDocument> : ISearchEngine<TDocum
     /// </summary>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>Index statistics including document count and size.</returns>
-    public async Task<LuceneIndexStats> GetStatsAsync(CancellationToken cancellationToken = default)
+    public Task<LuceneIndexStats> GetStatsAsync(CancellationToken cancellationToken = default)
     {
         EnsureInitialized();
 
-        await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        _indexLock.EnterReadLock();
         try
         {
-            var docCount = _writer!.NumDocs;
-            var maxDoc = _writer.MaxDoc;
+            int docCount;
+            int maxDoc;
+
+            // If _writer is available, use it; otherwise use SearcherManager
+            if (_writer != null)
+            {
+                docCount = _writer.NumDocs;
+                maxDoc = _writer.MaxDoc;
+            }
+            else if (_searcherManager != null)
+            {
+                var searcher = _searcherManager.Acquire();
+                try
+                {
+                    docCount = searcher.IndexReader.NumDocs;
+                    maxDoc = searcher.IndexReader.MaxDoc;
+                }
+                finally
+                {
+                    _searcherManager.Release(searcher);
+                }
+            }
+            else
+            {
+                docCount = 0;
+                maxDoc = 0;
+            }
 
             // Calculate directory size
             var directoryInfo = new DirectoryInfo(_indexPath);
@@ -462,16 +513,16 @@ public sealed partial class LuceneSearchEngine<TDocument> : ISearchEngine<TDocum
                 ? directoryInfo.EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length)
                 : 0;
 
-            return new LuceneIndexStats(
+            return Task.FromResult(new LuceneIndexStats(
                 DocumentCount: docCount,
                 MaxDocuments: maxDoc,
                 SizeBytes: sizeBytes,
                 CachedDocuments: _documentCache.Count
-            );
+            ));
         }
         finally
         {
-            _writeLock.Release();
+            _indexLock.ExitReadLock();
         }
     }
 
@@ -504,22 +555,73 @@ public sealed partial class LuceneSearchEngine<TDocument> : ISearchEngine<TDocum
 
     private void EnsureInitialized()
     {
-        if (!_initialized || _directory == null || _writer == null || _analyzer == null)
+        if (!_initialized || _directory == null || _analyzer == null)
         {
             throw new InvalidOperationException(
                 "LuceneSearchEngine must be initialized before use. Call InitializeAsync first.");
         }
     }
 
+    private void EnsureWritable()
+    {
+        EnsureInitialized();
+
+        if (!_readOnly && _writer != null)
+            return; // Already in write mode
+
+        _indexLock.EnterWriteLock();
+        try
+        {
+            if (!_readOnly && _writer != null)
+                return; // Double-check
+
+            // Dispose read-only SearcherManager before upgrading
+            _searcherManager?.Dispose();
+            _searcherManager = null;
+
+            // Clear stale lock from previous crash
+            if (IndexWriter.IsLocked(_directory!))
+            {
+                try { IndexWriter.Unlock(_directory!); } catch { /* held by live process */ }
+            }
+
+            var indexConfig = new IndexWriterConfig(LUCENE_VERSION, _analyzer!)
+            {
+                OpenMode = OpenMode.CREATE_OR_APPEND,
+                Similarity = new BM25Similarity()
+            };
+
+            _writer = new IndexWriter(_directory!, indexConfig);
+            _writer.Commit();
+            _searcherManager = new SearcherManager(_writer, true, null);
+            _readOnly = false;
+        }
+        catch (LockObtainFailedException)
+        {
+            // Re-establish read-only SearcherManager if upgrade failed
+            if (_searcherManager == null && DirectoryReader.IndexExists(_directory!))
+            {
+                _searcherManager = new SearcherManager(_directory!, null);
+            }
+            throw new InvalidOperationException(
+                "Cannot acquire write lock — another process holds the Lucene index lock. " +
+                "Stop the other process to enable writes.");
+        }
+        finally
+        {
+            _indexLock.ExitWriteLock();
+        }
+    }
+
     /// <inheritdoc />
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
         if (_disposed)
         {
-            return;
+            return ValueTask.CompletedTask;
         }
 
-        await _writeLock.WaitAsync().ConfigureAwait(false);
+        _indexLock.EnterWriteLock();
         try
         {
             _searcherManager?.Dispose();
@@ -536,11 +638,12 @@ public sealed partial class LuceneSearchEngine<TDocument> : ISearchEngine<TDocum
         }
         finally
         {
-            _writeLock.Release();
-            _writeLock.Dispose();
+            _indexLock.ExitWriteLock();
+            _indexLock.Dispose();
         }
 
         GC.SuppressFinalize(this);
+        return ValueTask.CompletedTask;
     }
 
     /// <summary>
